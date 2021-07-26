@@ -1,0 +1,93 @@
+---
+title: "Stacked_Ensemble"
+author: "Adam Kuperavage"
+date: "6/30/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Libraries
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(stacks)
+```
+
+# Load Models
+
+```{r}
+lr_res <- readRDS("lr_res.rds")
+#rf_res <- readRDS("rf_res.rds")
+#xgboost_res <- readRDS("xgboost_res.rds")
+svm_linear_res <- readRDS("svm_linear_res.rds")
+
+```
+
+# 4. Stacked Ensemble
+
+## Add Candidates
+
+```{r}
+fram_stacks <- 
+  stacks() %>% 
+  add_candidates(lr_res) %>% 
+  #add_candidates(rf_res) %>% 
+  #add_candidates(xgboost_res) %>% 
+  add_candidates(svm_linear_res)
+  
+fram_stacks
+```
+
+## Fit Members
+
+```{r}
+fram_stacks <- 
+  fram_stacks %>% 
+  blend_predictions() %>% 
+  fit_members()
+
+fram_stacks
+```
+
+## Calculate ROC AUC of Stack for the Training Data
+
+```{r}
+fram_train %>% 
+  bind_cols(predict(fram_stacks, new_data = fram_train, type = "prob")) %>% 
+  roc_auc(truth = TenYearCHD, estimate = .pred_no)
+```
+
+## Calculate ROC AUC of Stack for the Testing Data
+
+```{r}
+fram_test %>% 
+  bind_cols(predict(fram_stacks, new_data = fram_test, type = "prob")) %>% 
+  roc_auc(truth = TenYearCHD, estimate = .pred_no)
+```
+
+## Calculate Accuracy on Testing Set
+
+```{r}
+fram_test %>% 
+  bind_cols(predict(fram_stacks, new_data = fram_test)) %>% 
+  summarise(accuracy = mean(TenYearCHD == .pred_class))
+```
+
+
+## Model Performance Summary
+
+| Models                  | ROC AUC   | Accuracy  |
+|-------------------------|-----------|-----------|
+| Logistic Regression     | 0.7246077 | 0.8528302 |
+| Support Vector Machines | 0.7210703 | 0.8481132 |
+| Random Forest           | 0.7056564 | 0.8471698 |
+| Stacked Ensemble        | 0.7199718 | 0.8518868	|          |
+
+: Summary of Model Performances on Testing Data
+
+
+

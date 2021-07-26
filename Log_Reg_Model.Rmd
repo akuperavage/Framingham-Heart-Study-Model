@@ -1,0 +1,154 @@
+---
+title: "Logistic Regression Model"
+author: "Adam Kuperavage"
+date: "6/30/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Load Libraries
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(glmnet)
+```
+
+# 2. Logistic Regression Model
+
+## Logistic Regression Model Initiated
+```{r}
+lr_mod <- 
+  logistic_reg(penalty = tune(), mixture = 1) %>% 
+  set_engine("glmnet")
+
+lr_mod
+```
+
+## Recipe for Preprocessing Data
+```{r}
+lr_recipe <- 
+  recipe(TenYearCHD ~ ., data = fram_train) %>% 
+  step_dummy(all_nominal(), -all_outcomes()) %>% 
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_predictors())
+
+lr_recipe %>% prep() %>% juice()
+```
+
+## Combined Model and Recipe to make Workflow
+
+```{r}
+lr_workflow <- 
+  workflow() %>% 
+  add_model(lr_mod) %>% 
+  add_recipe(lr_recipe)
+```
+
+## Created Tuning Grid
+
+```{r}
+lr_reg_grid <- tibble(penalty = 10^seq(-4, -1, length.out = 30))
+
+lr_reg_grid %>% head()
+```
+
+## Tune Model with Grid
+
+```{r}
+set.seed(345)
+
+lr_res <- 
+  lr_workflow %>% 
+  tune_grid(val_set,
+            grid = lr_reg_grid,
+            control = control_grid(save_pred = TRUE, save_workflow = TRUE),
+            metrics = metric_set(roc_auc))
+lr_res
+```
+
+# Show Best Models
+
+```{r}
+lr_res %>% 
+    show_best(metric = "roc_auc")
+```
+
+
+
+## Save Logistic Regression Models to a File
+
+```{r}
+#saveRDS(lr_res, "lr_res.rds")
+```
+
+# Show Best Model
+
+```{r}
+lr_best <- 
+  lr_res %>% 
+  select_best(metric = "roc_auc")
+
+lr_best
+```
+
+# Last Model
+
+```{r}
+last_lr_mod <- 
+  logistic_reg(penalty = lr_best$penalty, mixture = 1) %>% 
+  set_engine("glmnet")
+```
+
+
+# Update Workflow
+
+```{r}
+last_lr_workflow <- 
+  lr_workflow %>% 
+  update_model(last_lr_mod)
+```
+
+# Last Fit
+
+```{r}
+last_lr_fit <- 
+  last_lr_workflow %>% 
+  last_fit(splits)
+
+last_lr_fit
+```
+
+
+# Collect Metrics
+
+```{r}
+last_lr_fit %>% 
+  collect_metrics()
+```
+
+
+# FINAL FITTED MODEL - USE THIS FOR PREDICTION
+
+```{r}
+last_fitted_model <- fit(last_lr_workflow, fram_train)
+```
+
+
+# Example
+
+```{r}
+predict(last_fitted_model, fram_test, type = "prob")
+```
+
+
+# Save to Project Folder
+
+```{r}
+saveRDS(last_fitted_model, "last_fitted_model.rds")
+```
+
+

@@ -1,0 +1,137 @@
+---
+title: "Rand_For_Model"
+author: "Adam Kuperavage"
+date: "6/30/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Load Libraries
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(ranger)
+```
+
+
+# 2. Random Forest Model 
+
+## Random Forest Determine the Number of Cores
+
+```{r}
+cores <- parallel::detectCores()
+cores
+```
+
+## Create Random Forest Model
+
+```{r}
+rf_mod <- 
+  rand_forest(mtry = tune(), min_n = tune(), trees = 1000) %>% 
+  set_engine("ranger", num.threads = cores) %>% 
+  set_mode("classification")
+```
+
+## Random Forest recipe for Preprocessing Data
+
+```{r}
+rf_recipe <- 
+  recipe(TenYearCHD ~ ., data = fram_train)
+```
+
+## Create Random Forest Workflow
+
+```{r}
+rf_workflow <- 
+  workflow() %>% 
+  add_model(rf_mod) %>% 
+  add_recipe(rf_recipe)
+```
+
+## Confirm Tuning of Two Parameters
+
+```{r}
+rf_mod
+
+rf_mod %>% 
+  parameters()
+```
+
+## Tune along Grid Random Forest
+
+```{r}
+set.seed(345)
+
+rf_res <- 
+  rf_workflow %>% 
+  tune_grid(val_set,
+            grid = 25,
+            control = control_grid(save_pred = TRUE, save_workflow = TRUE),
+            metrics = metric_set(roc_auc))
+rf_res
+```
+
+## Top 5 Best Random Forest Models out of 25
+
+```{r}
+rf_res %>% 
+  show_best(metric = "roc_auc")
+```
+
+## Save Random Forest Models to a File
+
+```{r}
+#saveRDS(rf_res, "rf_res.rds")
+```
+
+# Show Best Model
+
+```{r}
+rf_best <- 
+  rf_res %>% 
+  select_best(metric = "roc_auc")
+
+rf_best
+```
+
+# Last Model
+
+```{r}
+last_rf_mod <- 
+  rand_forest(mtry = rf_best$mtry, min_n = rf_best$min_n, trees = 1000) %>% 
+  set_engine("ranger", num.threads = cores) %>% 
+  set_mode("classification")
+```
+
+
+# Update Workflow
+
+```{r}
+last_rf_workflow <- 
+  rf_workflow %>% 
+  update_model(last_rf_mod)
+```
+
+# Last Fit
+
+```{r}
+last_rf_fit <- 
+  last_rf_workflow %>% 
+  last_fit(splits)
+
+last_rf_fit
+```
+
+
+# Collect Metrics
+
+```{r}
+last_rf_fit %>% 
+  collect_metrics()
+```
+
+

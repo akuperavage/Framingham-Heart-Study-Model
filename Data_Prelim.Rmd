@@ -1,0 +1,142 @@
+---
+title: "Framingham Project -- Data Preliminaries"
+author: "Adam Kuperavage"
+date: "6/30/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+
+```{r}
+library(tidyverse)
+```
+
+## Load Data, Converted Integers into Doubles
+
+```{r}
+fram <- 
+  read.csv("framingham.csv") %>% 
+  mutate_if(is.integer, as.double) 
+
+glimpse(fram)
+```
+
+## Skim Data
+
+```{r}
+fram %>% skimr::skim()
+```
+
+## Checked to see if non-smokers had missing values
+
+```{r}
+fram %>% 
+  group_by(currentSmoker, cigsPerDay) %>% 
+  summarise(n = n())
+```
+
+## Imputed Missing Values using Median, Skimmed Mutated Data
+
+```{r}
+fram_tbl <-   
+  fram %>%  
+  as_tibble() %>% 
+  mutate(
+    education = case_when(is.na(education) ~ median(education, na.rm = TRUE),
+                          TRUE ~ education),
+    cigsPerDay = case_when(is.na(cigsPerDay) ~ median(cigsPerDay, na.rm = TRUE), TRUE ~ cigsPerDay),
+    BPMeds = case_when(is.na(BPMeds) ~ median(BPMeds, na.rm = TRUE),
+                          TRUE ~ BPMeds),
+    totChol = case_when(is.na(totChol) ~ median(totChol, na.rm = TRUE),
+                        TRUE ~ totChol),
+    BMI = case_when(is.na(BMI) ~ median(BMI, na.rm = TRUE),
+                          TRUE ~ BMI),
+    heartRate = case_when(is.na(heartRate) ~ median(heartRate, na.rm = TRUE),
+                          TRUE ~ heartRate ),
+    glucose = case_when(is.na(glucose) ~ median(glucose, na.rm = TRUE),
+                        TRUE ~ glucose)
+  )
+
+fram_tbl %>% skimr::skim()
+```
+
+
+## Made the Values in the Code More Readable, Glimpsed at Readable Data
+```{r}
+fram_tbl <-   
+  
+  fram_tbl %>% 
+  mutate(gender = case_when(male == 0 ~ "female",
+                            male == 1 ~ "male"),
+         education = as.character(education),
+         currentSmoker = case_when(currentSmoker == 0 ~ "no",
+                                   currentSmoker == 1 ~ "yes"),
+         BPMeds = case_when(BPMeds == 0 ~ "no",
+                            BPMeds == 1 ~ "yes"),
+         prevalentStroke = case_when(prevalentStroke == 0 ~ "no",
+                                     prevalentStroke == 1 ~ "yes"),
+         prevalentHyp = case_when(prevalentHyp == 0 ~ "no",
+                                  prevalentHyp == 1 ~ "yes"),
+         diabetes = case_when(diabetes == 0 ~ "no",
+                              diabetes == 1 ~ "yes"),
+         TenYearCHD = case_when(TenYearCHD == 0 ~ "no",
+                                TenYearCHD == 1 ~ "yes")) %>% 
+  
+  select(-male) %>% 
+  mutate(TenYearCHD = as.factor(TenYearCHD))
+
+fram_tbl %>% glimpse()
+```
+
+## Checked proportions of TenYearCHD
+
+```{r}
+fram_tbl %>% 
+  count(TenYearCHD) %>% 
+  mutate(prop = n/sum(n))
+```
+
+# 2. Data Splits
+
+## Initial Split the Data, Checked Proportions
+
+```{r}
+set.seed(123)
+
+splits <- initial_split(fram_tbl, strata = TenYearCHD)
+
+fram_train <- training(splits)
+fram_test <- testing(splits)
+```
+
+## Check Training Data
+
+```{r}
+fram_train %>% 
+  count(TenYearCHD) %>% 
+  mutate(prop = n/sum(n))
+```
+
+## Check Testing Data
+
+```{r}
+fram_test %>% 
+  count(TenYearCHD) %>% 
+  mutate(prop = n/sum(n))
+```
+
+## Split Validation Set
+
+```{r}
+set.seed(234)
+
+val_set <- validation_split(fram_train,
+                            strata = TenYearCHD,
+                            prop = 0.80)
+val_set
+```
+

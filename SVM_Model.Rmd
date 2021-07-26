@@ -1,0 +1,117 @@
+---
+title: "SVM_Model"
+author: "Adam Kuperavage"
+date: "6/30/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Libraries
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(kernlab)
+```
+
+
+## D. Support Vector Machines
+
+### Recipe for Preprocessing Data
+
+```{r}
+svm_linear_recipe <- 
+  recipe(TenYearCHD ~., data = fram_train) %>% 
+  step_rm(education) %>% 
+  step_dummy(all_nominal(), -all_outcomes(), one_hot = TRUE) %>%  
+  step_other(all_nominal(), threshold = 0.01) %>%
+  step_nzv(all_nominal())
+
+svm_linear_recipe %>% prep() %>% juice() 
+```
+
+### Create SVM Model
+
+```{r}
+svm_linear_spec <- svm_poly(degree = 1) %>%
+  set_mode("classification") %>%
+  set_engine("kernlab", scaled = FALSE, num.threads = 8) 
+
+svm_linear_spec
+```
+
+### Create Workflow
+
+```{r}
+svm_linear_workflow <- workflow() %>%
+  add_model(svm_linear_spec %>% set_args(cost = tune())) %>%
+  add_recipe(svm_linear_recipe)
+```
+
+### Set up Grid
+
+```{r}
+svm_linear_grid <- grid_regular(cost(), levels = 10)
+```
+
+### Tune Model with Grid
+
+```{r}
+set.seed(345)
+
+svm_linear_res <-   
+  svm_linear_workflow %>% 
+  tune_grid(val_set,
+            grid = svm_linear_grid,
+            control = control_grid(verbose = TRUE, save_pred = TRUE, save_workflow = TRUE),
+            metrics = metric_set(roc_auc))
+
+svm_linear_res
+```
+
+
+### Show Best SVM Model
+
+```{r}
+svm_linear_res %>% 
+  show_best(metric = "roc_auc")
+```
+
+## Save Random Forest Models to a File
+
+```{r}
+#saveRDS(svm_linear_res, "svm_linear_res.rds")
+```
+
+```{r}
+svm_linear_best <- 
+  svm_linear_res %>% 
+  select_best(metric = "roc_auc")
+
+svm_linear_best
+```
+
+```{r}
+last_svm_workflow <- workflow() %>%
+  add_model(svm_linear_spec %>% set_args(cost = svm_linear_best$cost)) %>%
+  add_recipe(svm_linear_recipe)
+
+last_svm_workflow  
+```
+
+```{r}
+last_svm_fit <- 
+  last_svm_workflow %>% 
+  last_fit(splits)
+
+last_svm_fit
+```
+
+```{r}
+last_svm_fit %>% 
+  collect_metrics()
+```
+
