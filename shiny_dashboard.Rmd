@@ -1,0 +1,119 @@
+---
+title: "Framingham Shiny Dashboard"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Libraries
+
+```{r}
+library(shiny)
+library(shinydashboard)
+library(ggplot2)
+library(dplyr)
+library(lime)
+```
+
+# Load Models
+
+```{r}
+last_fitted_model <- fit(last_lr_workflow, fram_train)
+```
+
+
+# Establish Header
+
+```{r}
+header <- dashboardHeader(title = "Framingham Heart Study",
+                          titleWidth = 290)
+```
+
+# Establish Sidebar
+
+```{r}
+sidebar <- dashboardSidebar(width = 290,
+                            sidebarMenu(menuItem("Info", tabName = "info", icon = icon("atlas")),
+                                        menuItem("Prediction", tabName = "prediction", icon = icon("search"))))
+```
+
+# Establish Body
+
+```{r}
+body <- dashboardBody( 
+  tabItems(tabItem('info',
+                   box(title = "Categorical Variables",
+                       status = "primary", 
+                       width = 12,
+                        radioButtons("gender", "Select a gender:", choices = c("male", "female")),
+                        radioButtons("prev_stroke", "Do you have a history of stroke?", choices = c("yes", "no")),
+                        radioButtons("currentSmoker", "Are you a current smoker?", choices = c("yes", "no")),
+                        radioButtons("BPmeds", "Are you taking any blood pressure medication?", choices = c("yes", "no")),
+                        radioButtons("prevHyp", "Do you have hypertension?", choices = c("yes", "no")),
+                        radioButtons("diabetes", "Do you have diabetes?", choices = c("yes", "no"))),
+                   box(title = "Numerical variables",
+                       status = "primary",
+                       width = 12,
+                        numericInput("age", "How old are you?", value = 45, min = 16, max = 100),
+                        numericInput("cigsperDay", "How many cigarettes do you smoke?", value = 10, min = 0, max = 200),
+                        numericInput("glucoselevel", "What is your glucose level?", value = 140, min = 0, max = 400),
+                        numericInput("sysBP", "What is your systolic blood pressure?", value = 100, min = 0, max = 300)
+                       )),
+           tabItem('prediction',
+                   box(title = "Ten Year CHD Prediction Result",
+                       status = "success",
+                       solidHeader = TRUE,
+                       width = 4,
+                       height = 260,
+                       div(h5('Percentage Risk of CHD within 10 years:')),
+                        verbatimTextOutput("value", placeholder = TRUE),
+                        actionButton("enter", "Enter"))
+           )))
+         
+```
+
+# Establish UI
+
+```{r}
+ui <- dashboardPage(header, sidebar, body)
+```
+
+# Establish Server
+
+```{r}
+server <- function(input, output) {
+  a <- reactiveValues(result = NULL)
+  
+  observeEvent(input$enter, {
+    values = data.frame(gender = input$gender,
+                        cigsPerDay = input$cigsperDay,
+                        prevalentStroke = input$prev_stroke,
+                        sysBP = input$sysBP,
+                        glucose = input$glucoselevel,
+                        age = input$age,
+                        diaBP = 82,
+                        totChol = 234,
+                        BMI = 25.4,
+                        heartRate = 75,
+                        education = as.character(2),
+                        currentSmoker = input$currentSmoker,
+                        BPMeds = input$BPmeds,
+                        prevalentHyp = input$prevHyp,
+                        diabetes = input$diabetes)
+    a$result <- floor(predict(last_fitted_model, new_data = values, type = "prob")$.pred_yes *100)
+  })
+  
+  output$value <- renderText({
+    paste(a$result)
+  })
+}
+```
+
+# Combine UI and Server by running through shinyApp
+
+```{r}
+shiny::shinyApp(ui, server)
+```
+
