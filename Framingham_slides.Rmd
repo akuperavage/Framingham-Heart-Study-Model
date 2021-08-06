@@ -1,0 +1,197 @@
+---
+title: "A Machine Learning Approach for Predicting the Ten-Year Risk of Coronary Heart Disease from the Framingham Heart Study Data"
+#subtitle: 
+author: "Anny Martinez-Velasquez, Adam Kuperavage"
+institute: "Delaware State Univeristy, Dover, DE"
+date: "8/6/2021"
+output:
+  xaringan::moon_reader:
+    css: [default, rladies, rladies-fonts]
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+---
+
+
+
+```{r setup, include=FALSE}
+options(htmltools.dir.version = FALSE)
+
+# NOTE: Data_Prelim.Rmd and Log_Reg_Model.Rmd must be run first.
+
+```
+
+# Intro to Framingham Heart Study
+
+- The Framingham Heart Study is an on-going long-term cardiovascular study originating in 1948. 
+
+--
+
+- It spans three generational cohorts plus additional cohorts for minorities and spouses.
+
+--
+
+- For our research, we decided to use a subset of the Framingham Heart Study consisting 4,239 individuals since it was accesible online at kaggle.com.
+
+--
+
+____
+
+### The Big Question
+
+__Can we build a machine learning model that can predict the probability of coronary heart disease (CHD) occurring within a ten-year time period?__
+
+---
+
+#Our variables
+
+Our outcome/dependent variable is "TenYearCHD" which is what we are trying to predict. 
+
+The rest were our independent variables that we will affect our predictions.
+
+```{r}
+fram_tbl %>% glimpse()
+```
+
+---
+
+# Our Procedure
+-  Used R programming language with supervised learning techniques that use labeled inputs with a trained model to reach desired outcomes when given new data. (Tidyverse, Tidymodels, Glmnet, and Shiny packages)
+
+- Machine Learning is a subdivision of artificial intelligence that utilizes statistics and coding to make predictions.
+
+- Machine Learning can be put into four steps: __extract features, split data, train the model, and evaluate findings.__
+
+--
+
+__First Steps__
+
+ - Split the original data into a __training set and testing set.__
+ 
+ - Subdivide the training set into __validation set__.
+
+```{r}
+set.seed(123)
+splits <- initial_split(fram_tbl, strata = TenYearCHD)
+fram_train <- training(splits)
+fram_test <- testing(splits)
+val_set <- validation_split(fram_train,
+                            strata = TenYearCHD,
+                            prop = 0.80)
+```
+
+---
+
+
+# Model Comparison
+
+We created multiple machine learning models such as __logistic regression, random forest, support vector machines, and stacked ensemble models__.
+
+Each of these models are useful when dealing with binary classification problems. 
+
+For our problem,the logistic regression model worked the best in terms of ROC AUC and accuracy.
+
+Accuracy does not measure performance well when the dataset is unbalanced. 
+
+--
+
+| Models                  | ROC AUC   | Accuracy  |
+|-------------------------|-----------|-----------|
+| Logistic Regression     | 0.7246077 | 0.8528302 |
+| Support Vector Machines | 0.7210703 | 0.8481132 |
+| Random Forest           | 0.7056564 | 0.8471698 |
+| Stacked Ensemble        | 0.7199718 | 0.8518868	|
+
+
+---
+
+# Logistic Regression Model
+
+__Our Best Model:__
+Logistic regression considers the relationship between a dependent variable and 15 independent variables and predicts the probability of whether a binary event will occur.
+
+```{r}
+lr_mod <- 
+  logistic_reg(penalty = tune(), mixture = 1) %>% 
+  set_engine("glmnet")
+```
+
+```{r}
+lr_recipe <- 
+  recipe(TenYearCHD ~ ., data = fram_train) %>% 
+  step_dummy(all_nominal(), -all_outcomes()) %>% 
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_predictors())
+```
+
+```{r}
+set.seed(345)
+lr_res <- 
+  lr_workflow %>% 
+  tune_grid(val_set,
+            grid = lr_reg_grid,
+            control = control_grid(save_pred = TRUE, save_workflow = TRUE),
+            metrics = metric_set(roc_auc))
+```
+---
+
+# Performance 
+
+-  The last_lr_fit has an updated workflow complete with an adjusted penalty for the model. These are the metrics when the new workflow is introduced to new data. 
+
+```{r}
+last_lr_fit %>% 
+  collect_metrics()
+```
+
+- The finished fitted model making predictions on ten-year CHD:
+
+```{r}
+predict(last_fitted_model, fram_test, type = "prob") %>%
+  head(3)
+```
+
+
+---
+
+# Conclusion
+
+- The logistic regression model was the best model in terms of predictability performance when introduced new data. 
+
+- Due to the simplicity of the logistic regression model, it makes interpreting easier which is beneficial in creating a potential aid in assessing CHD.
+
+- The final logistic regression model was incorporated into a Shiny app and could serve as a potential aid to healthcare professionals. 
+
+_____________________________________
+
+### Future Endeavors
+
+- Experimentation with more machine learning models that could yield better results
+
+- Expand output on the app to include a more personalized explanation.
+
+---
+
+# Take a Look at Our Code
+
+https://github.com/akuperavage/Framingham-Heart-Study-Model
+
+__References__
+
+Wickham et al., (2019). Welcome to the tidyverse. Journal of Open
+  Source Software, 4(43), 1686, https://doi.org/10.21105/joss.01686
+  
+Kuhn et al., (2020). Tidymodels: a collection of packages for
+  modeling and machine learning using tidyverse principles.
+  https://www.tidymodels.org
+  
+Winston Chang, Joe Cheng, JJ Allaire, Carson Sievert, Barret
+  Schloerke, Yihui Xie, Jeff Allen, Jonathan McPherson, Alan Dipert and
+  Barbara Borges (2021). shiny: Web Application Framework for R. R
+  package version 1.6.0. https://CRAN.R-project.org/package=shiny
+  
+Mahmood, S. S., Levy, D., Vasan, R. S., & Wang, T. J. (2014). The Framingham Heart    Study and the epidemiology of cardiovascular disease: a historical perspective.     Lancet (London, England), 383(9921), 999–1008.          https://doi.org/10.1016/S0140-6736(13)61752-3
+
+__Acknowledgement__: This research is supported by NINDS grant #R25NS095371
